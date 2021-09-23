@@ -1,0 +1,56 @@
+name: Aws HTTP Node.js Package
+on:
+  push:
+    branches:
+      - master
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Setup .npmrc file to publish to GitHub Packages
+      - uses: actions/setup-node@v1
+        with:
+          node-version: "12.x"
+          registry-url: "https://npm.pkg.github.com"
+          # Defaults to the user or organization that owns the workflow file
+          scope: "@nome-da-organizacao"
+      - name: Define tag
+        id: define_tag
+        shell: bash
+        run: |
+          VERSION=$(cat package.json | jq -r '.version')
+          TAG="v$VERSION"
+          echo "##[set-output name=tag;]$(echo $TAG)"
+      - uses: mukunku/tag-exists-action@v1.0.0
+        id: checkTag
+        with:
+          tag: ${{ steps.define_tag.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check if version exists
+        shell: bash
+        run: |
+          if [ "${{ steps.checkTag.outputs.exists }}" == "true" ]; then
+            echo "Versão já existe!!"
+            exit 1
+          fi
+        env:
+          TAG: ${{ steps.define_tag.outputs.tag }}
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ steps.define_tag.outputs.tag }}
+          release_name: Release ${{ steps.define_tag.outputs.tag }}
+          body: |
+            Lorem ipsum dolor
+          draft: false
+          prerelease: false
